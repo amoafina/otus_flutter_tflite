@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
-import 'package:flutter_isolate/flutter_isolate.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:otus_tflite_test/helper/app_string.dart';
-// import 'package:otus_tflite_test/service/tensor.dart';
-import 'package:otus_tflite_test/service/tensor_isolate.dart';
+import 'package:otus_tflite_test/service/tensor.dart';
 
 class MainScreen extends StatefulWidget {
   @override
@@ -14,7 +11,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // Tensor _tensor = new Tensor();
+  Tensor _tensor = new Tensor();
   File _image;
   List _recognitions;
   String _model = AppString.ssd;
@@ -22,38 +19,15 @@ class _MainScreenState extends State<MainScreen> {
   double _imageWidth;
   bool _busy = false;
 
-  SendPort mainToIsolateStream;
-
   @override
   void initState() {
     super.initState();
     _busy = true;
-    // _tensor.loadModel(_model).then((val) {
-    //   setState(() {
-    //     _busy = false;
-    //   });
-    // });
-
-    initIsolate().then((SendPort value) {
-      mainToIsolateStream = value;
+    _tensor.loadModel(_model).then((val) {
+      setState(() {
+        _busy = false;
+      });
     });
-  }
-
-  Future<SendPort> initIsolate() async {
-    Completer completer = new Completer<SendPort>();
-    ReceivePort isolateToMainStream = ReceivePort();
-
-    isolateToMainStream.listen((data) {
-      if (data is SendPort) {
-        SendPort mainToIsolateStream = data;
-        completer.complete(mainToIsolateStream);
-      } else {
-        print('[isolateToMainStream] $data');
-      }
-    });
-
-    await FlutterIsolate.spawn(ITensor.init, isolateToMainStream.sendPort);
-    return completer.future;
   }
 
   @override
@@ -117,13 +91,10 @@ class _MainScreenState extends State<MainScreen> {
       _model = model;
       _recognitions = null;
     });
-    // await _tensor.loadModel(model);
+    await _tensor.loadModel(model);
 
-    if (_image != null) {
-
-      mainToIsolateStream.send([model, _image.readAsBytesSync()]);
+    if (_image != null)
       _predictImage(_image);
-    }
     else
       setState(() {
         _busy = false;
@@ -178,10 +149,10 @@ class _MainScreenState extends State<MainScreen> {
     List tensorResult;
     switch (_model) {
       case AppString.yolo:
-        // tensorResult = await _tensor.yolov2Tiny(image);
+        tensorResult = await _tensor.yolov2Tiny(image);
         break;
       case AppString.ssd:
-        // tensorResult = await _tensor.ssdMobileNet(image);
+        tensorResult = await _tensor.ssdMobileNet(image);
         break;
     }
 
