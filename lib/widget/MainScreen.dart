@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter_isolate/flutter_isolate.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:otus_tflite_test/helper/app_string.dart';
-// import 'package:otus_tflite_test/service/tensor.dart';
 import 'package:otus_tflite_test/service/tensor_isolate.dart';
 
 class MainScreen extends StatefulWidget {
@@ -14,45 +14,38 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // Tensor _tensor = new Tensor();
   File _image;
   List _recognitions;
   String _model = AppString.ssd;
   double _imageHeight;
   double _imageWidth;
-  bool _busy = false;
 
-  SendPort mainToIsolateStream;
+  SendPort _tensorIsolate;
 
   @override
   void initState() {
     super.initState();
-    _busy = true;
-    // _tensor.loadModel(_model).then((val) {
-    //   setState(() {
-    //     _busy = false;
-    //   });
-    // });
-
     initIsolate().then((SendPort value) {
-      mainToIsolateStream = value;
+      _tensorIsolate = value;
     });
   }
 
   Future<SendPort> initIsolate() async {
     Completer completer = new Completer<SendPort>();
-    ReceivePort isolateToMainStream = ReceivePort();
+    ReceivePort recievePort = ReceivePort();
 
-    isolateToMainStream.listen((data) {
+    recievePort.listen((data) {
       if (data is SendPort) {
         SendPort mainToIsolateStream = data;
         completer.complete(mainToIsolateStream);
-      } else {
-        print('[isolateToMainStream] $data');
+      } else {        
+        setState(() {
+          _recognitions = jsonDecode(data);
+        });
       }
     });
 
-    await FlutterIsolate.spawn(ITensor.init, isolateToMainStream.sendPort);
+    await FlutterIsolate.spawn(ITensor.init, recievePort.sendPort);
     return completer.future;
   }
 
@@ -69,14 +62,6 @@ class _MainScreenState extends State<MainScreen> {
     ));
 
     stackChildren.addAll(_renderBoxes(size));
-
-    if (_busy) {
-      stackChildren.add(const Opacity(
-        child: ModalBarrier(dismissible: false, color: Colors.grey),
-        opacity: 0.3,
-      ));
-      stackChildren.add(const Center(child: CircularProgressIndicator()));
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -113,21 +98,13 @@ class _MainScreenState extends State<MainScreen> {
 
   void _onSelect(model) async {
     setState(() {
-      _busy = true;
       _model = model;
       _recognitions = null;
     });
-    // await _tensor.loadModel(model);
 
     if (_image != null) {
-
-      mainToIsolateStream.send([model, _image.readAsBytesSync()]);
       _predictImage(_image);
     }
-    else
-      setState(() {
-        _busy = false;
-      });
   }
 
   List<Widget> _renderBoxes(Size screen) {
@@ -167,27 +144,13 @@ class _MainScreenState extends State<MainScreen> {
   Future _predictImagePicker() async {
     var image = await ImagePicker.pickImage(source: ImageSource.camera);
     if (image == null) return;
-    setState(() {
-      _busy = true;
-    });
     _predictImage(image);
   }
 
   Future _predictImage(File image) async {
     if (image == null) return;
-    List tensorResult;
-    switch (_model) {
-      case AppString.yolo:
-        // tensorResult = await _tensor.yolov2Tiny(image);
-        break;
-      case AppString.ssd:
-        // tensorResult = await _tensor.ssdMobileNet(image);
-        break;
-    }
 
-    setState(() {
-      _recognitions = tensorResult;
-    });
+    _tensorIsolate.send([_model, image.readAsBytesSync()]);
 
     new FileImage(image)
         .resolve(new ImageConfiguration())
@@ -200,7 +163,6 @@ class _MainScreenState extends State<MainScreen> {
 
     setState(() {
       _image = image;
-      _busy = false;
     });
   }
 }
