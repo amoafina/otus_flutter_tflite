@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:otus_tflite_test/helper/app_string.dart';
 import 'package:tflite/tflite.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ITensor {
   static init(SendPort isolateToMainStream) {
@@ -13,7 +13,9 @@ class ITensor {
 
     mainToIsolateStream.listen((data) async {
       String _model = data[0];
-      File _file = File.fromRawPath(data[1]);
+      File _file = await File('${(await getTemporaryDirectory()).path}/image.png').create();
+      _file.writeAsBytesSync(data[1]);
+
       List<dynamic> _result;
 
       switch (_model) {
